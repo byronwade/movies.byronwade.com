@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "movies",
+      "hasCanvas": false,
+      "bodyTextLen": 391,
+      "bodyTextHash": "4953f325a2c04831d1f70b77bbb70e54b423b7744b03edbb3544b47b0a833e8a",
+      "bodyTextPrefix": "Parasite 2019 · R · 132m Watch Save Skip Not interested 85 · Cra",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "movies",
+      "hasCanvas": false,
+      "bodyTextLen": 19,
+      "bodyTextHash": "3d058d9eeb368b7da79d49bf78fd7673566be7ca696a112a2dcb053a2bec8265",
+      "bodyTextPrefix": "movies Your algorithm",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}

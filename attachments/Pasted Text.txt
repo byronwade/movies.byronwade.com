@@ -1,0 +1,297 @@
+Yes. If we keep email as the primary universal source, there are several ways to enrich it substantially without turning the product into an integration nightmare.
+
+The key realization is: we don’t just need watch history. We need evidence about taste. Some of the best signals aren’t “watched movie X.”
+
+What I’d collect
+
+Signal	What we learn	Value
+Apple/Amazon/Fandango rental or purchase	Probably watched	Very high
+AMC/Regal/Cinemark/Fandango ticket	Probably watched + when	Very high
+Movie preorder	Strong interest	Very high
+Repeated franchise purchases	Franchise affinity	Very high
+Streaming subscription	What they can watch	High
+Streaming cancellation	Availability changed	Medium
+Movie merchandise purchases	Strong franchise interest	High
+Physical Blu-ray/DVD purchases	Probably watched/owned	High
+Movie-related search/activity	Interest even without watching	High
+Trailer activity	Current intent	High
+Letterboxd/IMDb ratings	Explicit taste	Extremely high
+Netflix history	Actual viewing	Extremely high
+User feedback inside our app	Ground truth	Highest
+
+Then enrich every identified title with external movie metadata.
+
+For example, your email tells us:
+
+Purchased Annihilation
+
+Our system turns that single event into hundreds of usable features:
+
+Annihilation
+2018
+Sci-fi
+Psychological
+Mystery
+Horror
+Cerebral
+Atmospheric
+Dark
+Slow burn
+Female lead
+Alien biology
+Cosmic horror
+Alex Garland
+Natalie Portman
+A24-ish audience overlap
+115 minutes
+R-rated
+
+Now combine that with Sunshine, Prometheus, Arrival, etc., and we’re learning latent preferences, rather than merely genres.
+
+That’s where the recommendation engine gets interesting.
+
+⸻
+
+Google could be an enormous second source
+
+If someone uses Gmail, there’s a decent chance they also use YouTube.
+
+YouTube officially maintains watch history, search history, likes, dislikes, subscriptions, “Not interested” feedback and other recommendation signals. Google itself says those signals are used for recommendations. 
+
+Imagine importing:
+
+searched “Life movie trailer”
+watched Life trailer
+watched “10 best alien movies”
+watched Project Hail Mary trailer
+watched Annihilation ending explained
+watched Dune Part Three trailer
+
+Even without Netflix history, that tells our model an enormous amount about what the person is interested in.
+
+Google Takeout allows users to export account data, including YouTube-related information and account activity. 
+
+So I’d have:
+
+Connect Google
+
+And underneath that connection, Thorbis-style progressive disclosure:
+
+✓ Email entertainment history
+✓ YouTube interests
+✓ YouTube likes
+✓ Google activity
+✓ Movie purchases
+
+The user doesn’t need to understand five different imports.
+
+⸻
+
+Then offer a “Supercharge my recommendations” button
+
+This is where we can support the enthusiasts without burdening normal people.
+
+Netflix
+
+Netflix actually gives users an official Download All viewing-history CSV for each profile. That’s real watched data rather than inferred data. 
+
+Upload it once.
+
+Done.
+
+Letterboxd
+
+Excellent signal because it contains intentional watched status, ratings, reviews, diary entries and lists. Letterboxd provides an account export containing CSVs. 
+
+Interestingly, I would not depend on their API. Letterboxd currently says API access isn’t being granted for recommendation/data-analysis projects like this. Their export is the safer path. 
+
+Trakt
+
+This one is particularly attractive.
+
+Trakt exposes history through its API and has the concept of scrobbling, where media software automatically reports start/pause/stop viewing events. 
+
+So:
+
+Connect Trakt
+
+could be one of our few actual integrations.
+
+⸻
+
+But there’s an even richer source: the user’s own behavior in our app
+
+Suppose we recommend you Life.
+
+You don’t click it.
+
+Then tomorrow we recommend Upgrade.
+
+You immediately open:
+
+* trailer
+* cast
+* reviews
+* synopsis
+* streaming availability
+
+Then hit Watch.
+
+That’s a gigantic signal.
+
+We should collect things like:
+
+impression
+opened_details
+watched_trailer
+expanded_reviews
+checked_cast
+saved
+dismissed
+seen_it
+not_interested
+selected_to_watch
+rated_afterward
+
+Even time spent can be useful carefully.
+
+If you instantly dismiss romantic comedies 20 times but repeatedly investigate sci-fi thrillers, the system learns before you’ve explicitly rated anything.
+
+⸻
+
+And use social data when users voluntarily provide it
+
+This fits the original idea you had for this product.
+
+Rather than trying to extract someone’s entire X/Instagram history automatically, let them optionally provide public profiles/usernames where permitted and analyze movie-related interests only.
+
+If someone follows:
+
+* Christopher Nolan
+* A24
+* Marvel
+* Star Wars
+* IGN
+* Rotten Tomatoes
+
+that’s useful.
+
+If they post:
+
+“holy shit Dune was good”
+
+that’s an extremely strong signal.
+
+But social should be bonus enrichment, not required onboarding.
+
+⸻
+
+One more source I really like: household separation
+
+This solves a problem I noticed immediately with your Gmail results.
+
+Your receipts contained:
+
+Annihilation
+Coraline
+Spirit: Stallion of the Cimarron
+An American Tail: Fievel Goes West
+
+Obviously we shouldn’t conclude:
+
+Byron’s taste = cosmic horror + children’s animated horses. 😂
+
+A household account needs profiles.
+
+When email discovers something questionable:
+
+Who watched Coraline?
+
+Byron
+Hayley
+Kids
+Everyone
+Not sure
+
+You only need to ask occasionally.
+
+Now shared email becomes an asset instead of contaminated data.
+
+⸻
+
+I’d ultimately make a “Taste Graph”
+
+Not:
+
+Byron likes sci-fi = 0.82
+
+More like:
+
+Byron
+ │
+ ├── DARK SCI-FI       0.94
+ │    ├── cosmic       0.96
+ │    ├── survival     0.91
+ │    ├── mystery      0.89
+ │    └── dystopian    0.78
+ │
+ ├── PACING
+ │    ├── tense        0.92
+ │    ├── cerebral     0.88
+ │    └── slow-burn    0.73
+ │
+ ├── THEMES
+ │    ├── technology   0.96
+ │    ├── AI           0.95
+ │    ├── engineering  0.93
+ │    ├── exploration  0.89
+ │    └── survival     0.87
+ │
+ ├── PEOPLE
+ │    ├── Alex Garland
+ │    ├── ...
+ │
+ └── NEGATIVE SIGNALS
+      ├── ...
+
+Movies get the same embedding/attribute structure.
+
+Then recommendation becomes essentially:
+
+user taste × movie attributes × novelty × unseen probability × recency × quality
+
+rather than “people who watched X also watched Y.”
+
+⸻
+
+The streamlined product I’d build
+
+Normal onboarding stays ridiculously simple:
+
+Let’s learn what you like.
+
+Connect Google
+
+We’ll find movies you’ve purchased, rented, seen in theaters, and shown interest in.
+
+Continue with Google
+
+That’s it.
+
+Behind that one button, email gives us the historical transactional evidence.
+
+Then optionally:
+
+Improve my recommendations →
+
+Netflix history
+Trakt
+Letterboxd
+IMDb
+Other data export
+
+And from that point forward, your own app behavior becomes the primary source of truth.
+
+That gives you the universal nature you’re after without requiring users to install extensions, run Plex servers, connect seven streaming services, or manually enter 500 movies.
+
+And I think there’s an important product principle here: don’t chase 100% reconstruction of someone’s past. Get enough historical evidence to make the first 10 recommendations good, then make every interaction improve recommendation #11 onward.
