@@ -610,6 +610,13 @@ export function listPassed(movieState: Record<string, UserMovieState>, ctx?: She
 }
 
 function lastUserId() {
+  if (typeof window === "undefined") return "guest";
+  try {
+    const id = localStorage.getItem(LAST_USER)?.trim();
+    if (id && id !== "guest") return id;
+  } catch {
+    /* private mode */
+  }
   return "guest";
 }
 
@@ -769,6 +776,13 @@ export const useKino = create<KinoState>((set, get) => ({
 
   hydrate: async ({ userId, signedIn }) => {
     const state = get();
+    if (!signedIn) {
+      try {
+        localStorage.removeItem(LAST_USER);
+      } catch {
+        /* ignore */
+      }
+    }
     if (state.ready && state.userId === userId && state.signedIn === signedIn) return;
     if (state.ready && state.userId === userId && signedIn && !state.signedIn) {
       set({ signedIn: true });

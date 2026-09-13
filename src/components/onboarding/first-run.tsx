@@ -45,6 +45,7 @@ export function FirstRun() {
         pathname !== "/live" &&
         pathname !== "/algorithm" &&
         !pathname.startsWith("/movie/") &&
+        !pathname.startsWith("/u/") &&
         !pathname.startsWith("/@"),
     );
   }, [n, pendingAsks.length, pathname]);

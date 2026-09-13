@@ -17,6 +17,7 @@ export function MovieViewport({ rec, active }: { rec: RankedRecommendation; acti
   const openTrailer = useKino((s) => s.openTrailer);
   const trailerFor = useKino((s) => s.trailerFor);
   const services = useKino((s) => s.services);
+  const spoilerSafe = useKino((s) => s.spoilerSafe);
   const playing = active && trailerFor === movie.id;
   const [more, setMore] = useState(false);
   const genre = movie.genres.slice(0, 2).join(" · ");
@@ -92,7 +93,9 @@ export function MovieViewport({ rec, active }: { rec: RankedRecommendation; acti
                 </span>
                 <RatingsRow ratings={movie.ratings} className="cover-scores" />
               </span>
-              <span className="cover-blurb type-content leading-snug">{movie.overview}</span>
+              <span className="cover-blurb type-content leading-snug">
+                {spoilerSafe ? `${movie.director} · ${genre}` : movie.overview}
+              </span>
               <span className="mt-1 block truncate type-caption text-body">
                 {[owned ? "On your shelf" : null, clock, watchLine(movie, services)].filter(Boolean).join(" · ")}
               </span>

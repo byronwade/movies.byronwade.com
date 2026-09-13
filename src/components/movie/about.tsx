@@ -33,13 +33,14 @@ export function MovieAbout({
   onHide?: () => void;
 }) {
   const services = useKino((s) => s.services);
+  const spoilerSafe = useKino((s) => s.spoilerSafe);
   const openTrailer = useKino((s) => s.openTrailer);
   const extras = useMovieExtras(movie);
   const [shot, setShot] = useState<string | null>(null);
   const [shared, setShared] = useState(false);
   const language = LANGUAGE_LABEL[movie.language] ?? movie.language;
   const similar = movie.similarIds.map((id) => MOVIE_BY_ID[id]).filter((m): m is Movie => Boolean(m));
-  const gallery = extras.stills;
+  const gallery = spoilerSafe ? [] : extras.stills;
 
   return (
     <div>
@@ -108,7 +109,13 @@ export function MovieAbout({
         </button>
       ) : null}
 
-      <p className="mt-5 type-content leading-relaxed text-pretty">{movie.overview}</p>
+      {spoilerSafe ? (
+        <p className="mt-5 type-content leading-relaxed text-pretty text-body">
+          Spoiler-free is on. Plot and stills stay hidden until you turn it off in settings.
+        </p>
+      ) : (
+        <p className="mt-5 type-content leading-relaxed text-pretty">{movie.overview}</p>
+      )}
 
       {gallery.length ? (
         <Section title="Stills">
@@ -192,7 +199,7 @@ export function MovieAbout({
         </Section>
       ) : null}
 
-      {movie.themes.length ? (
+      {movie.themes.length && !spoilerSafe ? (
         <Section title="Themes">
           <div className="flex flex-wrap gap-1.5">
             {movie.themes.map((t) => (
@@ -215,7 +222,7 @@ export function MovieAbout({
         </Section>
       ) : null}
 
-      {rec?.reasons.length ? (
+      {rec?.reasons.length && !spoilerSafe ? (
         <Section title="Why this">
           <ul className="group divide-y divide-fg/5">
             {rec.reasons.map((r, i) => (
