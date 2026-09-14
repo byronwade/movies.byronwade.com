@@ -80,6 +80,30 @@ function Login() {
 
   if (!busy && !isPending && user) return <Navigate to="/" />;
 
+  const finishEmail = async () => {
+    const res = await authClient.signIn.email({ email, password, callbackURL: "/login" });
+    if (res.error) {
+      setError(friendlyAuthError(res.error.message ?? "Could not sign in."));
+      return false;
+    }
+    const token = tokenFrom(res);
+    if (token) captureSessionToken(token);
+    const ok = await goHome();
+    if (!ok) setError("Signed in, but the session didn’t stick. Try again.");
+    return ok;
+  };
+
+  const claimGooglePassword = async () => {
+    const res = await fetch("/api/claim-password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = (await res.json().catch(() => null)) as { ok?: boolean; code?: string } | null;
+    if (data?.ok) return "claimed" as const;
+    return (data?.code ?? "error") as string;
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -93,20 +117,50 @@ function Login() {
           callbackURL: "/login",
         });
         if (res.error) {
-          setError(friendlyAuthError(res.error.message ?? "Could not create the account."));
+          const msg = res.error.message ?? "";
+          if (/already exists/i.test(msg)) {
+            const claim = await claimGooglePassword();
+            if (claim === "claimed") {
+              await finishEmail();
+              return;
+            }
+            if (claim === "has_password") {
+              setError("That email already has a password. Sign in instead.");
+              setMode("in");
+              return;
+            }
+          }
+          setError(friendlyAuthError(msg || "Could not create the account."));
           return;
         }
         const token = tokenFrom(res);
         if (token) captureSessionToken(token);
-      } else {
-        const res = await authClient.signIn.email({ email, password, callbackURL: "/login" });
-        if (res.error) {
-          setError(friendlyAuthError(res.error.message ?? "Could not sign in."));
-          return;
-        }
-        const token = tokenFrom(res);
-        if (token) captureSessionToken(token);
+        const ok = await goHome();
+        if (!ok) setError("Signed in, but the session didn’t stick. Try again.");
+        return;
       }
+
+      const res = await authClient.signIn.email({ email, password, callbackURL: "/login" });
+      if (res.error) {
+        const claim = await claimGooglePassword();
+        if (claim === "claimed") {
+          await finishEmail();
+          return;
+        }
+        if (claim === "not_found") {
+          setError("No account for that email. Create one.");
+          setMode("up");
+          return;
+        }
+        setError(
+          claim === "has_password"
+            ? "Email or password doesn’t match."
+            : friendlyAuthError(res.error.message ?? "Could not sign in."),
+        );
+        return;
+      }
+      const token = tokenFrom(res);
+      if (token) captureSessionToken(token);
       const ok = await goHome();
       if (!ok) setError("Signed in, but the session didn’t stick. Try again.");
     } catch (err) {
@@ -121,8 +175,12 @@ function Login() {
     <main className="app-scroll relative grid h-full min-h-0 bg-bg px-5" style={{ paddingTop: "var(--safe-top)" }}>
       <div className="mx-auto my-auto w-full max-w-sm py-8">
         <p className="brand !block">movies</p>
-        <h1 className="mt-5 type-display">Sign in</h1>
-        <p className="mt-2 type-content text-body">Save lists and For you to this account.</p>
+        <h1 className="mt-5 type-display">{mode === "up" ? "Create account" : "Sign in"}</h1>
+        <p className="mt-2 type-content text-body">
+          {brokerOk
+            ? "Save lists and For you to this account."
+            : "Used Google here before? Enter that Gmail and choose a password — it attaches to the same account."}
+        </p>
         <form onSubmit={submit} className="mt-8 space-y-3">
           <input
             className="well h-12 w-full rounded-full px-4 type-content outline-none"
