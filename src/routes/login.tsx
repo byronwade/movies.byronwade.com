@@ -13,20 +13,35 @@ function tokenFrom(res: { data?: unknown }) {
   return data?.token ?? data?.session?.token ?? null;
 }
 
+function friendlyAuthError(raw: string) {
+  const msg = raw.toLowerCase();
+  if (msg.includes("invalid origin")) return "This host isn’t trusted for sign-in yet. Refresh and try email.";
+  if (msg.includes("invalid_redirect") || msg.includes("redirect_uri")) {
+    return "Google and X only work in the Grok preview. Use email on this site.";
+  }
+  if (msg.includes("invalid password") || msg.includes("invalid email") || msg.includes("invalid credentials")) {
+    return "Email or password doesn’t match.";
+  }
+  if (msg.includes("user already exists") || msg.includes("already exists")) {
+    return "That email already has an account. Sign in instead.";
+  }
+  return raw;
+}
+
 function Login() {
   const { user, isPending } = useCurrentUserState();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"in" | "up">("in");
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
   const nav = useNavigate();
   const router = useRouter();
 
   const goHome = async () => {
     const session = await Promise.race([
       authClient.getSession(),
-      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 4000)),
+      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 8000)),
     ]).catch(() => null);
     const uid = (session as { data?: { user?: { id?: string } } } | null)?.data?.user?.id;
     if (!uid) return false;
@@ -43,7 +58,7 @@ function Login() {
   };
 
   useEffect(() => {
-    if (pending || isPending || user) return;
+    if (busy || isPending || user) return;
     const trySession = () => {
       void goHome();
     };
@@ -55,14 +70,14 @@ function Login() {
       document.removeEventListener("visibilitychange", trySession);
       window.removeEventListener("pageshow", trySession);
     };
-  }, [pending, isPending, user]);
+  }, [busy, isPending, user]);
 
-  if (!pending && !isPending && user) return <Navigate to="/" />;
+  if (!busy && !isPending && user) return <Navigate to="/" />;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    setPending(true);
+    setBusy("email");
     try {
       if (mode === "up") {
         const res = await authClient.signUp.email({
@@ -72,7 +87,7 @@ function Login() {
           callbackURL: "/login",
         });
         if (res.error) {
-          setError(res.error.message ?? "Could not create the account.");
+          setError(friendlyAuthError(res.error.message ?? "Could not create the account."));
           return;
         }
         const token = tokenFrom(res);
@@ -80,7 +95,7 @@ function Login() {
       } else {
         const res = await authClient.signIn.email({ email, password, callbackURL: "/login" });
         if (res.error) {
-          setError(res.error.message ?? "Could not sign in.");
+          setError(friendlyAuthError(res.error.message ?? "Could not sign in."));
           return;
         }
         const token = tokenFrom(res);
@@ -89,9 +104,9 @@ function Login() {
       const ok = await goHome();
       if (!ok) setError("Signed in, but the session didn’t stick. Try again.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not sign in.");
+      setError(friendlyAuthError(err instanceof Error ? err.message : "Could not sign in."));
     } finally {
-      setPending(false);
+      setBusy(null);
     }
   };
 
@@ -108,22 +123,24 @@ function Login() {
               <Button
                 key={p.providerId}
                 className="w-full"
-                disabled={pending}
+                disabled={busy !== null}
                 onClick={() => {
                   setError(null);
-                  setPending(true);
-                  void signIn(p.providerId, { callbackURL: "/login" })
+                  setBusy(p.providerId);
+                  void signIn(p.providerId, { callbackURL: "/login", errorCallbackURL: "/login" })
                     .then(async () => {
                       const ok = await goHome();
-                      if (!ok) setError("You confirmed, but this window didn’t receive the session. Tap Sign in again.");
+                      if (!ok) {
+                        setError("Google and X need the Grok preview. Use email on this site.");
+                      }
                     })
                     .catch((err: unknown) => {
-                      setError(err instanceof Error ? err.message : "Could not open sign-in.");
+                      setError(friendlyAuthError(err instanceof Error ? err.message : "Could not open sign-in."));
                     })
-                    .finally(() => setPending(false));
+                    .finally(() => setBusy(null));
                 }}
               >
-                {pending ? "Waiting for sign-in…" : `Continue with ${p.label}`}
+                {busy === p.providerId ? "Opening…" : `Continue with ${p.label}`}
               </Button>
             ))
           ) : (
@@ -139,6 +156,7 @@ function Login() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            autoComplete="email"
           />
           <input
             className="well h-12 w-full rounded-full px-4 type-content outline-none"
@@ -148,12 +166,17 @@ function Login() {
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={8}
+            autoComplete={mode === "up" ? "new-password" : "current-password"}
           />
           {error ? <p className="type-content text-danger">{error}</p> : null}
-          <Button type="submit" variant="ghost" className="w-full" disabled={pending}>
-            {pending ? "Working…" : mode === "up" ? "Create account" : "Sign in with email"}
+          <Button type="submit" variant="ghost" className="w-full" disabled={busy !== null}>
+            {busy === "email" ? "Working…" : mode === "up" ? "Create account" : "Sign in with email"}
           </Button>
-          <button type="button" className="flex h-11 w-full items-center justify-center type-chrome text-body" onClick={() => setMode((m) => (m === "in" ? "up" : "in"))}>
+          <button
+            type="button"
+            className="flex h-11 w-full items-center justify-center type-chrome text-body"
+            onClick={() => setMode((m) => (m === "in" ? "up" : "in"))}
+          >
             {mode === "in" ? "Need an account? Create one" : "Have an account? Sign in"}
           </button>
         </form>

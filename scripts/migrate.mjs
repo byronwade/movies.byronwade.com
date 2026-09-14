@@ -18,13 +18,9 @@ import { dirname, join } from "node:path";
 import pg from "pg";
 import { pendingMigrations } from "./migration-plan.mjs";
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) {
-  console.log(
-    "[migrate] DATABASE_URL not set — skipping (the PGLite fallback migrates itself).",
-  );
-  process.exit(0);
-}
+const databaseUrl =
+  process.env.DATABASE_URL ||
+  "postgresql://neondb_owner:npg_I81bCNcDVlGa@ep-proud-resonance-au9tos7l-pooler.c-10.us-east-1.aws.neon.tech/neondb?sslmode=require";
 
 const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 
