@@ -18,7 +18,7 @@ export const Route = createFileRoute("/u/$handle")({
     try {
       return await pullPublicProfile({ data: { handle: params.handle } });
     } catch {
-      return { missing: true as const };
+      return { missing: false as const, error: true as const };
     }
   },
   component: PublicTaste,
@@ -60,7 +60,7 @@ function usePublic(handle: string) {
         if (live) setData(d);
       })
       .catch(() => {
-        if (live) setData({ missing: true });
+        if (live) setData({ missing: false, error: true });
       });
     return () => {
       live = false;
@@ -73,7 +73,7 @@ function Collision({ a, b }: { a: string; b: string }) {
   const left = usePublic(a);
   const right = usePublic(b);
   const recs = useMemo(() => {
-    if (!left || left.missing || left.private || !right || right.missing || right.private) return [];
+    if (!left || left.missing || left.private || "error" in left || !right || right.missing || right.private || "error" in right) return [];
     return collideRank(
       { handle: left.handle, name: left.name, favorites: left.favorites, saved: left.saved, interested: left.interested, seen: left.seen, passed: left.passed },
       { handle: right.handle, name: right.name, favorites: right.favorites, saved: right.saved, interested: right.interested, seen: right.seen, passed: right.passed },
@@ -88,6 +88,7 @@ function Collision({ a, b }: { a: string; b: string }) {
     );
   }
 
+  const failed = [left, right].some((d) => "error" in d && d.error);
   const blocked = [left, right].find((d) => d.missing || d.private);
   return (
     <AppShell>
@@ -99,7 +100,9 @@ function Collision({ a, b }: { a: string; b: string }) {
             Loves of either, vetoes of either. A sitting two people can actually share.
           </p>
         </header>
-        {blocked?.missing ? (
+        {failed ? (
+          <p className="type-content text-body">Couldn’t load one of those pages. Try again in a moment.</p>
+        ) : blocked?.missing ? (
           <p className="type-content text-body">One of those usernames isn’t claimed.</p>
         ) : blocked?.private ? (
           <p className="type-content text-body">One of these tastes is private.</p>
@@ -128,6 +131,17 @@ function OneHandle({ handle }: { handle: string }) {
     return (
       <AppShell>
         <Workbench title={`@${handle}`} />
+      </AppShell>
+    );
+  }
+
+  if ("error" in data && data.error) {
+    return (
+      <AppShell>
+        <Workbench title={`@${handle}`}>
+          <p className="type-page">Couldn’t load @{handle}</p>
+          <p className="mt-2 type-content text-body">The page didn’t load. Try again in a moment.</p>
+        </Workbench>
       </AppShell>
     );
   }

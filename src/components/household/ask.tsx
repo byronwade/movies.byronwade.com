@@ -7,14 +7,15 @@ export function HouseholdAsk() {
   const ask = useKino((s) => s.pendingAsks[0]);
   const profiles = useKino((s) => s.profiles);
   const answer = useKino((s) => s.answerAsk);
+  const deferAsk = useKino((s) => s.deferAsk);
   if (!ask) return null;
   const movie = MOVIE_BY_ID[ask.movieId];
   return (
-    <NativeSheet open onClose={() => answer(ask.movieId, "skip")} label={`Who watched ${ask.title}?`}>
+    <NativeSheet open onClose={deferAsk} label={`Who watched ${ask.title}?`}>
       <p className="type-caption uppercase tracking-wide text-marker">Household</p>
       <h2 className="mt-1 type-section">Who watched {ask.title}?</h2>
       <p className="mt-2 type-content text-body">
-        Shared receipts mix kids’ films with your taste. Tell us who this belongs to. Not sure puts it on you.
+        Shared receipts mix kids’ films with your taste. Tell us who this belongs to. Close to decide later.
       </p>
       {movie ? (
         <StillImage
@@ -42,8 +43,8 @@ export function HouseholdAsk() {
         >
           Everyone
         </button>
-        <button type="button" className="flex h-11 w-full items-center justify-center type-chrome text-body" onClick={() => answer(ask.movieId, "skip")}>
-          Not sure
+        <button type="button" className="flex h-11 w-full items-center justify-center type-chrome text-body" onClick={() => answer(ask.movieId, "you")}>
+          Not sure — put it on me
         </button>
       </div>
     </NativeSheet>

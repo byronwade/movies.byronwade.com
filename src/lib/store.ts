@@ -216,6 +216,7 @@ type KinoState = {
   setFeedMode: (mode: "for-you" | "tune") => void;
   refreshGrok: () => Promise<void>;
   answerAsk: (movieId: string, profileId: string | "skip") => void;
+  deferAsk: () => void;
   ingestHits: (hits: ImportHit[], askHousehold: boolean) => number;
   importText: (input: { text?: string; username?: string }) => Promise<{ ok: boolean; count: number; error?: string }>;
   scanMail: () => Promise<{ ok: boolean; count: number; loginRequired?: boolean; loginUrl?: string; error?: string }>;
@@ -363,12 +364,10 @@ async function pushRemote(state: KinoState) {
   if (remotePayload) void pushRemote(useKino.getState());
 }
 
-function parsePersist(raw: string, migrate: boolean): Persist | null {
+function parsePersist(raw: string, _migrate: boolean): Persist | null {
   try {
     const p = JSON.parse(raw) as Partial<Persist> & { spoilerSafe?: boolean; prefsVersion?: number };
     if (!p || typeof p !== "object") return null;
-    const version = typeof p.prefsVersion === "number" ? p.prefsVersion : 0;
-    const stale = migrate || version < PREFS_VERSION;
     return {
       prefsVersion: PREFS_VERSION,
       events: Array.isArray(p.events) ? p.events : [],
@@ -377,7 +376,7 @@ function parsePersist(raw: string, migrate: boolean): Persist | null {
       profiles: Array.isArray(p.profiles) && p.profiles.length ? p.profiles : DEFAULT_PROFILES,
       activeProfileId: typeof p.activeProfileId === "string" ? p.activeProfileId : "you",
       pendingAsks: Array.isArray(p.pendingAsks) ? p.pendingAsks : [],
-      englishOnly: stale ? true : typeof p.englishOnly === "boolean" ? p.englishOnly : true,
+      englishOnly: typeof p.englishOnly === "boolean" ? p.englishOnly : true,
       spoilerSafe: typeof p.spoilerSafe === "boolean" ? p.spoilerSafe : true,
       tonight: parseTonight(p.tonight),
       letterboxdUser: typeof p.letterboxdUser === "string" ? p.letterboxdUser : "",
@@ -514,6 +513,7 @@ function assemble(state: KinoState, keep?: string | null, light = false) {
   const shown = sessionShownIds(scoped, state.sessionKey);
   for (const s of Object.values(movieState)) {
     if (parked(s)) shown.add(s.movieId);
+    if (s.interested && !s.notInterested && !s.seen && !s.neverShowAgain) shown.delete(s.movieId);
   }
   const kind = state.profiles.find((p) => p.id === state.activeProfileId)?.kind;
   const forYou = state.feedMode !== "tune";
@@ -627,6 +627,28 @@ function compactEvents(events: PreferenceEvent[]) {
   const map = new Map<string, PreferenceEvent>();
   for (const e of [...keep, ...noise]) map.set(e.id, e);
   return [...map.values()].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)).slice(-900);
+}
+
+function reverseSource(state: KinoState, source: string): PreferenceEvent[] {
+  const reversed = new Set(state.events.filter((e) => e.action === "undo" && e.reversesId).map((e) => e.reversesId as string));
+  const now = new Date().toISOString();
+  const undos: PreferenceEvent[] = [];
+  for (const e of state.events) {
+    if (e.source !== source || e.action === "undo" || reversed.has(e.id)) continue;
+    undos.push({
+      id: eventId(state.userId),
+      userId: state.userId,
+      profileId: e.profileId,
+      entityType: "movie",
+      entityId: e.entityId,
+      action: "undo",
+      source: "settings",
+      sessionId: state.sessionKey,
+      occurredAt: now,
+      reversesId: e.id,
+    });
+  }
+  return undos;
 }
 
 type MarkSnap = {
@@ -792,7 +814,10 @@ export const useKino = create<KinoState>((set, get) => ({
     }
     const local = loadLocal(userId);
     const guest = userId !== "guest" ? loadLocal("guest") : null;
-    const carryGuest = userId !== "guest" && (state.userId === "guest" || !state.ready);
+    const carryGuest =
+      userId !== "guest" &&
+      (state.userId === "guest" || !state.ready) &&
+      !(local?.events && local.events.length > 2);
     const sameUser = state.userId === userId;
     const events = mergeEventLists(
       carryGuest ? (guest?.events ?? []) : [],
@@ -909,6 +934,7 @@ export const useKino = create<KinoState>((set, get) => ({
     let keep: string | null | undefined = current.queue[current.index]?.movie.id;
     const currentId = current.queue[current.index]?.movie.id;
     const onCard = currentId === movieId;
+    if (action === "undo") keep = movieId;
     if (advance && onCard) {
       const rest = current.queue.filter((r) => r.movie.id !== movieId && !parked(movieState[r.movie.id]));
       const next =
@@ -1084,21 +1110,53 @@ export const useKino = create<KinoState>((set, get) => ({
   },
 
   answerAsk: (movieId, profileId) => {
+    if (profileId === "skip") {
+      get().deferAsk();
+      return;
+    }
     const asks = get().pendingAsks.filter((a) => a.movieId !== movieId);
-    set({ pendingAsks: asks });
-    const assigned = profileId === "skip" ? get().activeProfileId : profileId;
-    const existing = get().events.find(
+    const current = get();
+    const existing = current.events.find(
       (e) => e.entityId === movieId && (e.action === "import_seen" || e.action === "import_watchlist"),
     );
+    const now = new Date().toISOString();
+    const extra: PreferenceEvent[] = [];
     if (existing) {
-      set({
-        events: get().events.map((e) => (e.id === existing.id ? { ...e, profileId: assigned } : e)),
+      extra.push({
+        id: eventId(current.userId),
+        userId: current.userId,
+        profileId: existing.profileId,
+        entityType: "movie",
+        entityId: movieId,
+        action: "undo",
+        source: "household",
+        sessionId: current.sessionKey,
+        occurredAt: now,
+        reversesId: existing.id,
       });
+      extra.push({
+        ...existing,
+        id: eventId(current.userId),
+        profileId,
+        occurredAt: now,
+        source: "household",
+        sessionId: current.sessionKey,
+      });
+      set({ pendingAsks: asks, events: [...current.events, ...extra] });
     } else {
-      get().record("import_seen", movieId, { source: "household", profileId: assigned });
+      set({ pendingAsks: asks });
+      get().record("import_seen", movieId, { source: "household", profileId });
+      return;
     }
-    persist(get());
+    persist(get(), true);
     get().rebuildQueue(get().queue[get().index]?.movie.id);
+  },
+
+  deferAsk: () => {
+    const [first, ...rest] = get().pendingAsks;
+    if (!first) return;
+    set({ pendingAsks: rest });
+    persist(get());
   },
 
   ingestHits: (hits, askHousehold) => {
@@ -1386,11 +1444,10 @@ export const useKino = create<KinoState>((set, get) => ({
   },
 
   forgetMailImports: () => {
-    const before = get().events;
-    const events = before.filter((e) => e.source !== "mail");
-    const n = before.length - events.length;
+    const undos = reverseSource(get(), "mail");
+    const n = undos.length;
     set({
-      events,
+      events: n ? [...get().events, ...undos] : get().events,
       gmail: {
         ...get().gmail,
         total: 0,
@@ -1400,7 +1457,7 @@ export const useKino = create<KinoState>((set, get) => ({
         at: new Date().toISOString(),
       },
     });
-    persist(get());
+    persist(get(), true);
     get().rebuildQueue(null);
     get().flash({
       kind: n ? "ok" : "warn",
@@ -1411,11 +1468,10 @@ export const useKino = create<KinoState>((set, get) => ({
   },
 
   disconnectLetterboxd: () => {
-    const before = get().events;
-    const events = before.filter((e) => e.source !== "letterboxd");
-    const n = before.length - events.length;
-    set({ events, letterboxdUser: "" });
-    persist(get());
+    const undos = reverseSource(get(), "letterboxd");
+    const n = undos.length;
+    set({ events: n ? [...get().events, ...undos] : get().events, letterboxdUser: "" });
+    persist(get(), true);
     get().rebuildQueue(null);
     get().flash({
       kind: "ok",

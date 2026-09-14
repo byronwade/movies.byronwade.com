@@ -474,7 +474,7 @@ body {
   width: min(100%, var(--app-col));
   height: 100%;
   margin-inline: auto;
-  padding: 0.65rem 0 0.35rem;
+  padding: calc(0.65rem + var(--safe-top)) 0 0.35rem;
 }
 .cinema-copy {
   width: min(100%, var(--app-col));

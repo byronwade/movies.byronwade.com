@@ -47,7 +47,7 @@ describe("title keys", () => {
     }
   });
 
-  it("queue drops a remake of a title already served", () => {
+  it("queue keeps remakes from different years", () => {
     const rec = (id: string, title: string, year: number): RankedRecommendation => ({
       movie: { id, slug: id, title, year, director: "x" } as RankedRecommendation["movie"],
       rank: 1,
@@ -58,7 +58,8 @@ describe("title keys", () => {
       reasons: [],
     });
     const queue = composeQueue([rec("superman-2025", "Superman", 2025)], [rec("superman-1978", "Superman", 1978), rec("dune", "Dune", 2021)], new Set());
-    assert.deepEqual(queue.map((r) => r.movie.id), ["superman-2025", "dune"]);
-    assert.equal(uniqueQueue([rec("a", "Iron Man", 2008), rec("b", "Iron Man", 1931)]).length, 1);
+    assert.deepEqual(queue.map((r) => r.movie.id), ["superman-2025", "superman-1978", "dune"]);
+    assert.equal(uniqueQueue([rec("a", "Iron Man", 2008), rec("b", "Iron Man", 1931)]).length, 2);
+    assert.equal(uniqueQueue([rec("a", "Dune", 2021), rec("a2", "Dune", 2021)]).length, 1);
   });
 });

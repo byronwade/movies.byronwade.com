@@ -40,6 +40,7 @@ const TonightRow = z
     genre: z.string().max(40).nullable(),
     service: z.string().max(80).nullable().optional(),
     fresh: z.boolean().optional(),
+    room: z.array(z.string().max(40)).max(8).optional(),
   })
   .nullable();
 
@@ -228,6 +229,7 @@ async function insertEvents(sql: Sql, userId: string, events: unknown[]) {
      )
      on conflict (id) do update
      set action = excluded.action,
+         profile_id = excluded.profile_id,
          occurred_at = excluded.occurred_at,
          reverses_id = excluded.reverses_id,
          strength = excluded.strength
@@ -559,7 +561,7 @@ export const pullKinoState = createServerFn({ method: "POST" })
 
     return {
       payload: {
-        prefsVersion: 6,
+        prefsVersion: 7,
         events: eventRows.map((row) => ({ userId, ...toEvent(row) })),
         services: p?.services ?? [],
         profiles: profiles.length

@@ -141,6 +141,23 @@ describe("rank", () => {
     if (cold && arrival) assert.ok(arrival.score > cold.score);
   });
 
+  it("interested still ranks after a recent skip", () => {
+    const now = new Date();
+    const events = [
+      ev({ entityId: "arrival", action: "interested" }),
+      ev({ entityId: "arrival", action: "skip", occurredAt: now.toISOString() }),
+    ];
+    const movieState = projectMovieState(events);
+    const recs = rank({
+      taste: rebuildTaste(events),
+      movieState,
+      events,
+      now,
+      limit: 40,
+    }).recommendations;
+    assert.ok(recs.find((r) => r.movie.id === "arrival"));
+  });
+
   it("show_again clears not interested", () => {
     const events = [
       ev({ entityId: "annihilation", action: "not_interested", profileId: "you" }),

@@ -273,7 +273,7 @@ export const pullPublicProfile = createServerFn({ method: "POST" })
     };
     } catch (err) {
       console.error("[public] pullPublicProfile failed", err);
-      return { missing: true as const };
+      return { missing: false as const, error: true as const };
     }
   });
 

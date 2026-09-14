@@ -1,9 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/chrome/shell";
 import { Workbench } from "@/components/chrome/workbench";
 import { PosterGrid } from "@/components/movie/poster-grid";
 import { listFavorites, listInterested, listPassed, listSaved, listWatched, useKino } from "@/lib/store";
+import { projectMovieState } from "@/tasterank";
 import { SHELF_TABS, optionalShelf, type ShelfTab } from "@/lib/shelves";
 import { cn } from "@/lib/cn";
 import type { Movie } from "@/catalog/types";
@@ -22,7 +23,8 @@ const SHELVES: { id: ShelfTab; label: string }[] = [
 ];
 
 function Saved() {
-  const movieState = useKino((s) => s.movieState);
+  const events = useKino((s) => s.events);
+  const movieState = useMemo(() => projectMovieState(events), [events]);
   const taste = useKino((s) => s.taste);
   const signedIn = useKino((s) => s.signedIn);
   const record = useKino((s) => s.record);

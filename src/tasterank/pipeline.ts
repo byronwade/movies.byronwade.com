@@ -1,5 +1,5 @@
 import { MOVIES, MOVIE_BY_ID } from "../catalog/movies.ts";
-import { titleKey } from "../catalog/title-key.ts";
+import { filmKey } from "../catalog/title-key.ts";
 import { seriesKey } from "../catalog/series.ts";
 import type { Movie } from "../catalog/types.ts";
 import { consensus } from "../catalog/ratings.ts";
@@ -210,7 +210,7 @@ function eligible(
     if (movie.popularity < 0.4 && movie.quality < 0.8) return false;
   }
   if (session?.explore && movie.popularity < 0.28 && movie.quality < 0.68) return false;
-  if (state?.lastSkippedAt) {
+  if (state?.lastSkippedAt && !state.interested) {
     const hours = (now.getTime() - new Date(state.lastSkippedAt).getTime()) / 36e5;
     if (hours < 12) return false;
   }
@@ -358,44 +358,44 @@ function mixWatchable(
   const genreCount = new Map<string, number>();
   const directors = new Map<string, number>();
   const tight = Boolean(session?.genre || session?.mood || session?.service);
-  const take = (ok: (rec: RankedRecommendation) => boolean, cap: number) => {
-    for (const rec of pool) {
+  const take = (list: RankedRecommendation[], ok: (rec: RankedRecommendation) => boolean, cap: number, free = false) => {
+    for (const rec of list) {
       if (picked.length >= cap) break;
-      if (used.has(rec.movie.id) || titles.has(titleKey(rec.movie.title)) || !ok(rec)) continue;
+      if (used.has(rec.movie.id) || titles.has(filmKey(rec.movie.title, rec.movie.year)) || !ok(rec)) continue;
       const g = rec.movie.genres[0] ?? "";
       const d = rec.movie.director;
-      if (!tight && picked.length < Math.min(8, limit - 1)) {
+      if (!free && !tight && picked.length < Math.min(8, limit - 1)) {
         if ((genreCount.get(g) ?? 0) >= 2) continue;
         if (d && (directors.get(d) ?? 0) >= 1) continue;
       }
       picked.push(rec);
       used.add(rec.movie.id);
-      titles.add(titleKey(rec.movie.title));
+      titles.add(filmKey(rec.movie.title, rec.movie.year));
       genreCount.set(g, (genreCount.get(g) ?? 0) + 1);
       if (d) directors.set(d, (directors.get(d) ?? 0) + 1);
     }
   };
-  take((r) => Boolean(movieState?.[r.movie.id]?.owned), Math.min(2, limit));
-  take((r) => Boolean(movieState?.[r.movie.id]?.interested), Math.min(3, limit));
+  take(scored, (r) => Boolean(movieState?.[r.movie.id]?.owned), Math.min(2, limit), true);
+  take(scored, (r) => Boolean(movieState?.[r.movie.id]?.interested), Math.min(3, limit), true);
   if (session?.minutesLeft != null) {
-    take((r) => fitsTonight(r.movie.runtimeMin, session.minutesLeft!), Math.min(6, limit));
+    take(pool, (r) => fitsTonight(r.movie.runtimeMin, session.minutesLeft!), Math.min(6, limit));
   }
-  take(() => true, Math.min(3, limit));
+  take(pool, () => true, Math.min(3, limit));
   if (session?.subscribed?.length) {
-    take((r) => r.movie.watch.some((w) => w.included && session.subscribed!.includes(w.provider)), Math.min(7, limit));
+    take(pool, (r) => r.movie.watch.some((w) => w.included && session.subscribed!.includes(w.provider)), Math.min(7, limit));
   }
   if (!session?.fresh && (!session?.era || session.era === "any")) {
-    take((r) => r.movie.year >= now.getFullYear() - 2, Math.min(6, limit));
+    take(pool, (r) => r.movie.year >= now.getFullYear() - 2, Math.min(6, limit));
   }
-  take(() => true, limit);
+  take(pool, () => true, limit);
   if (session?.wildcards !== false) {
     const far = pool.slice(Math.floor(pool.length * 0.45));
     for (const rec of far) {
       if (picked.length >= limit) break;
-      if (used.has(rec.movie.id) || titles.has(titleKey(rec.movie.title))) continue;
+      if (used.has(rec.movie.id) || titles.has(filmKey(rec.movie.title, rec.movie.year))) continue;
       picked.push(rec);
       used.add(rec.movie.id);
-      titles.add(titleKey(rec.movie.title));
+      titles.add(filmKey(rec.movie.title, rec.movie.year));
       break;
     }
   }
@@ -419,12 +419,12 @@ function exploreDiversify(scored: RankedRecommendation[], limit: number) {
   while (out.length < limit && turn < limit * Math.max(keys.length, 1)) {
     const list = buckets.get(keys[turn % keys.length]!);
     const next =
-      list?.find((r) => !used.has(r.movie.id) && !titles.has(titleKey(r.movie.title)) && !directors.has(r.movie.director)) ??
-      list?.find((r) => !used.has(r.movie.id) && !titles.has(titleKey(r.movie.title)));
+      list?.find((r) => !used.has(r.movie.id) && !titles.has(filmKey(r.movie.title, r.movie.year)) && !directors.has(r.movie.director)) ??
+      list?.find((r) => !used.has(r.movie.id) && !titles.has(filmKey(r.movie.title, r.movie.year)));
     if (next) {
       out.push(next);
       used.add(next.movie.id);
-      titles.add(titleKey(next.movie.title));
+      titles.add(filmKey(next.movie.title, next.movie.year));
       directors.add(next.movie.director);
     }
     turn += 1;
@@ -631,7 +631,7 @@ export function uniqueQueue(recs: RankedRecommendation[], blockedTitles?: Set<st
   const titles = new Set<string>(blockedTitles);
   const out: RankedRecommendation[] = [];
   for (const rec of recs) {
-    const title = titleKey(rec.movie.title);
+    const title = filmKey(rec.movie.title, rec.movie.year);
     if (ids.has(rec.movie.id) || titles.has(title)) continue;
     ids.add(rec.movie.id);
     titles.add(title);
@@ -650,7 +650,7 @@ export function composeQueue(
   for (const id of shown) {
     if (id === keep) continue;
     const movie = MOVIE_BY_ID[id];
-    if (movie) blocked.add(titleKey(movie.title));
+    if (movie) blocked.add(filmKey(movie.title, movie.year));
   }
   const out: RankedRecommendation[] = [];
   const push = (rec: RankedRecommendation | undefined) => {
