@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createFileRoute, Navigate, useNavigate, useRouter } from "@tanstack/react-router";
-import { GROK_PROVIDERS, authClient, authEnabled, captureSessionToken, signIn } from "@/lib/auth/client";
+import { GROK_PROVIDERS, authClient, authEnabled, captureSessionToken, grokBrokerOAuthOk, signIn } from "@/lib/auth/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { AppShell } from "@/components/chrome/shell";
 import { Button } from "@/components/ui/button";
@@ -16,8 +16,8 @@ function tokenFrom(res: { data?: unknown }) {
 function friendlyAuthError(raw: string) {
   const msg = raw.toLowerCase();
   if (msg.includes("invalid origin")) return "This host isn’t trusted for sign-in yet. Refresh and try email.";
-  if (msg.includes("invalid_redirect") || msg.includes("redirect_uri")) {
-    return "Google and X only work in the Grok preview. Use email on this site.";
+  if (msg.includes("invalid redirect") || msg.includes("invalid_redirect") || msg.includes("redirect_uri")) {
+    return "Google and X only work in the Grok preview. Create an account with email here.";
   }
   if (msg.includes("invalid password") || msg.includes("invalid email") || msg.includes("invalid credentials")) {
     return "Email or password doesn’t match.";
@@ -33,8 +33,14 @@ function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"in" | "up">("in");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const q = new URLSearchParams(window.location.search);
+    const raw = q.get("error") || q.get("error_description") || q.get("message");
+    return raw ? friendlyAuthError(raw.replace(/\+/g, " ")) : null;
+  });
   const [busy, setBusy] = useState<string | null>(null);
+  const brokerOk = grokBrokerOAuthOk();
   const nav = useNavigate();
   const router = useRouter();
 
@@ -116,41 +122,10 @@ function Login() {
       <div className="mx-auto my-auto w-full max-w-sm py-8">
         <p className="brand !block">movies</p>
         <h1 className="mt-5 type-display">Sign in</h1>
-        <p className="mt-2 type-content text-body">Save lists and For you to this account. Grok is only for reading Gmail.</p>
-        <div className="mt-8 space-y-3">
-          {authEnabled ? (
-            GROK_PROVIDERS.map((p) => (
-              <Button
-                key={p.providerId}
-                className="w-full"
-                disabled={busy !== null}
-                onClick={() => {
-                  setError(null);
-                  setBusy(p.providerId);
-                  void signIn(p.providerId, { callbackURL: "/login", errorCallbackURL: "/login" })
-                    .then(async () => {
-                      const ok = await goHome();
-                      if (!ok) {
-                        setError("Google and X need the Grok preview. Use email on this site.");
-                      }
-                    })
-                    .catch((err: unknown) => {
-                      setError(friendlyAuthError(err instanceof Error ? err.message : "Could not open sign-in."));
-                    })
-                    .finally(() => setBusy(null));
-                }}
-              >
-                {busy === p.providerId ? "Opening…" : `Continue with ${p.label}`}
-              </Button>
-            ))
-          ) : (
-            <p className="type-content text-body">Sign-in is disabled in this preview.</p>
-          )}
-        </div>
-        <p className="mt-6 type-caption uppercase tracking-wide text-marker">Or email</p>
-        <form onSubmit={submit} className="mt-2 space-y-3">
+        <p className="mt-2 type-content text-body">Save lists and For you to this account.</p>
+        <form onSubmit={submit} className="mt-8 space-y-3">
           <input
-            className="well mt-1 h-12 w-full rounded-full px-4 type-content outline-none"
+            className="well h-12 w-full rounded-full px-4 type-content outline-none"
             placeholder="Email"
             type="email"
             value={email}
@@ -169,7 +144,7 @@ function Login() {
             autoComplete={mode === "up" ? "new-password" : "current-password"}
           />
           {error ? <p className="type-content text-danger">{error}</p> : null}
-          <Button type="submit" variant="ghost" className="w-full" disabled={busy !== null}>
+          <Button type="submit" className="w-full" disabled={busy !== null}>
             {busy === "email" ? "Working…" : mode === "up" ? "Create account" : "Sign in with email"}
           </Button>
           <button
@@ -180,6 +155,34 @@ function Login() {
             {mode === "in" ? "Need an account? Create one" : "Have an account? Sign in"}
           </button>
         </form>
+        {authEnabled && brokerOk ? (
+          <div className="mt-8 space-y-3">
+            <p className="type-caption uppercase tracking-wide text-marker">Or continue with</p>
+            {GROK_PROVIDERS.map((p) => (
+              <Button
+                key={p.providerId}
+                variant="ghost"
+                className="w-full"
+                disabled={busy !== null}
+                onClick={() => {
+                  setError(null);
+                  setBusy(p.providerId);
+                  void signIn(p.providerId, { callbackURL: "/login", errorCallbackURL: "/login" })
+                    .then(async () => {
+                      const ok = await goHome();
+                      if (!ok) setError("You confirmed, but this window didn’t receive the session. Tap again.");
+                    })
+                    .catch((err: unknown) => {
+                      setError(friendlyAuthError(err instanceof Error ? err.message : "Could not open sign-in."));
+                    })
+                    .finally(() => setBusy(null));
+                }}
+              >
+                {busy === p.providerId ? "Opening…" : `Continue with ${p.label}`}
+              </Button>
+            ))}
+          </div>
+        ) : null}
         <Button variant="ghost" className="mt-8 w-full" onClick={() => void nav({ to: "/" })}>
           Continue without an account
         </Button>

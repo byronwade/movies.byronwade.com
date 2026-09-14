@@ -103,6 +103,11 @@ function inLivePreview(): boolean {
   );
 }
 
+/** Grok's preview OAuth client only allows `*.grok-sandbox.com` redirect URIs. */
+export function grokBrokerOAuthOk(): boolean {
+  return inLivePreview();
+}
+
 function inIframe(): boolean {
   if (typeof window === "undefined") return false;
   try {
@@ -140,6 +145,10 @@ export async function signIn(
 ): Promise<void> {
   const callbackURL = opts.callbackURL ?? "/";
   const errorCallbackURL = opts.errorCallbackURL ?? "/";
+
+  if (!inLivePreview() && typeof window !== "undefined") {
+    throw new Error("Google and X only work in the Grok preview. Use email on this site.");
+  }
 
   // Open the popup SYNCHRONOUSLY on the user gesture — before any await
   // (including signOut). Awaiting first drops user-gesture privilege in some
