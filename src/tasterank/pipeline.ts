@@ -64,7 +64,7 @@ export const RANK_WEIGHTS = [
   { key: "craft", label: "Craft", pct: "light", detail: "RT, Metacritic, IMDb — never louder than you." },
   { key: "fresh", label: "New", pct: "recency", detail: "Recent releases get a half-life boost so 2025–26 can land in the first ten." },
   { key: "session", label: "This sitting", pct: "hard", detail: "Who, mood, genre, streamer, New." },
-  { key: "mix", label: "Mixer", pct: "first 10", detail: "Cap genre and director repeats. Interested titles come back early. Clock and receipts jump the queue." },
+  { key: "mix", label: "Mixer", pct: "first 10", detail: "Cap genre and director repeats. Interested titles recirculate later — never first. Clock and receipts can still jump." },
   { key: "grok", label: "Grok", pct: "rerank", detail: "Grok reorders the next twenty after a few marks." },
 ] as const;
 
@@ -210,6 +210,7 @@ function eligible(
     if (movie.popularity < 0.4 && movie.quality < 0.8) return false;
   }
   if (session?.explore && movie.popularity < 0.28 && movie.quality < 0.68) return false;
+  if (session?.explore && (state?.interested || state?.favorited || state?.seen)) return false;
   if (state?.lastSkippedAt && !state.interested) {
     const hours = (now.getTime() - new Date(state.lastSkippedAt).getTime()) / 36e5;
     if (hours < 12) return false;
@@ -341,7 +342,7 @@ function predictedWatch(opts: {
   const pSkip = clamp01((1 - opts.sim) * 0.42 + (opts.pull.neg < 0 ? 0.28 : 0) + Math.min(0.35, opts.skipCount * 0.12));
   const runtime =
     opts.runtimeMin >= 85 && opts.runtimeMin <= 140 ? 0.08 : opts.runtimeMin > 170 ? -0.1 : 0;
-  return 2.0 * pPositive + 1.0 * pSave + 0.45 * opts.craft + (opts.interested ? 1.05 : 0) + runtime - 2.6 * pSkip;
+  return 2.0 * pPositive + 1.0 * pSave + 0.45 * opts.craft + (opts.interested ? 0.16 : 0) + runtime - 2.6 * pSkip;
 }
 
 function mixWatchable(
@@ -376,7 +377,8 @@ function mixWatchable(
     }
   };
   take(scored, (r) => Boolean(movieState?.[r.movie.id]?.owned), Math.min(2, limit), true);
-  take(scored, (r) => Boolean(movieState?.[r.movie.id]?.interested), Math.min(3, limit), true);
+  take(pool, (r) => !movieState?.[r.movie.id]?.interested, Math.min(5, limit));
+  take(scored, (r) => Boolean(movieState?.[r.movie.id]?.interested), Math.min(picked.length + 2, limit), true);
   if (session?.minutesLeft != null) {
     take(pool, (r) => fitsTonight(r.movie.runtimeMin, session.minutesLeft!), Math.min(6, limit));
   }
@@ -518,7 +520,6 @@ export function rank(opts: {
     if (session?.criticsFirst) score += craft * 0.1;
     score += sessionBump(movie, opts.session);
     score += fatigue(state);
-    if (state?.interested && explore) score += 0.24;
     if (state?.owned) score += 0.55;
     if (session?.minutesLeft != null) {
       if (fitsTonight(movie.runtimeMin, session.minutesLeft)) score += 0.12;

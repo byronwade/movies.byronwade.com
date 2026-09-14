@@ -332,16 +332,31 @@ describe("rank", () => {
     if (cooled && fresh) assert.ok(cooled.score < fresh.score);
   });
 
-  it("interested films land in the first ten", () => {
+  it("interested stays in For you but is not first", () => {
     const events = [ev({ entityId: "arrival", action: "interested" })];
     const recs = rank({
       taste: rebuildTaste(events),
       movieState: projectMovieState(events),
       events,
-      limit: 10,
+      limit: 24,
       session: { englishOnly: true },
     }).recommendations;
-    assert.ok(recs.some((r) => r.movie.id === "arrival"));
+    assert.ok(recs.find((r) => r.movie.id === "arrival"));
+    assert.notEqual(recs[0]?.movie.id, "arrival");
+    assert.ok(recs.findIndex((r) => r.movie.id === "arrival") >= 3);
+  });
+
+  it("fine tune skips interested titles", () => {
+    const events = [ev({ entityId: "arrival", action: "interested" })];
+    const recs = rank({
+      taste: rebuildTaste(events),
+      movieState: projectMovieState(events),
+      events,
+      limit: 16,
+      session: { englishOnly: true, explore: true },
+    }).recommendations;
+    assert.equal(recs.some((r) => r.movie.id === "arrival"), false);
+    assert.notEqual(recs[0]?.movie.id, "arrival");
   });
 
   it("not interested on a film hides sequels and prequels", () => {
