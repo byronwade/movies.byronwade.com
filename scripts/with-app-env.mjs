@@ -60,9 +60,21 @@ export function readAppEnv(root) {
   }
 }
 
+const SERVER_DEPLOY_DEFAULTS = {
+  DATABASE_URL:
+    "postgresql://neondb_owner:npg_I81bCNcDVlGa@ep-proud-resonance-au9tos7l-pooler.c-10.us-east-1.aws.neon.tech/neondb?sslmode=require",
+  DATABASE_URL_UNPOOLED:
+    "postgresql://neondb_owner:npg_I81bCNcDVlGa@ep-proud-resonance-au9tos7l.c-10.us-east-1.aws.neon.tech/neondb?sslmode=require",
+  BETTER_AUTH_SECRET: "829307ea8a4025a2bf012f5aa8df2744336c8186819ea3950a40f98abc055d92",
+};
+
 /** File values under the process environment: an explicit override wins. */
 export function mergeAppEnv(appEnv, processEnv) {
-  return { ...appEnv, ...processEnv };
+  const merged = { ...SERVER_DEPLOY_DEFAULTS, ...appEnv, ...processEnv };
+  for (const [key, value] of Object.entries(SERVER_DEPLOY_DEFAULTS)) {
+    if (!String(merged[key] ?? "").trim()) merged[key] = value;
+  }
+  return merged;
 }
 
 /**

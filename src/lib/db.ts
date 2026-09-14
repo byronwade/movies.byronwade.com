@@ -1,4 +1,4 @@
-import "./server/deploy-env";
+import { DEPLOY_DATABASE_URL } from "./server/deploy-env";
 import { pendingMigrations } from "../../scripts/migration-plan.mjs";
 
 /** Which database backend is active. */
@@ -9,7 +9,7 @@ export type DbSource = "neon" | "pglite";
 const rawDatabaseUrl =
   typeof process !== "undefined" ? process.env.DATABASE_URL : undefined;
 const databaseUrl =
-  rawDatabaseUrl && rawDatabaseUrl.trim() ? rawDatabaseUrl : undefined;
+  (rawDatabaseUrl && rawDatabaseUrl.trim()) || DEPLOY_DATABASE_URL;
 
 /**
  * Active backend: real **Neon** when `DATABASE_URL` is set (deployed / configured

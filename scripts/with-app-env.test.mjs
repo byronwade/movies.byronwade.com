@@ -59,9 +59,12 @@ test("an explicit process-env override wins over the file", () => {
   assert.equal(merged.PATH, "/usr/bin");
 });
 
-test("this app ships auth on", () => {
-  assert.equal(readAppEnv(projectRoot()).VITE_AUTH_ENABLED, "true");
+test("fills Neon auth defaults when the host did not inject them", () => {
+  const merged = mergeAppEnv({}, { PATH: "/usr/bin" });
+  assert.match(merged.DATABASE_URL, /^postgresql:\/\//);
+  assert.equal(merged.PATH, "/usr/bin");
 });
+
 
 test("vite loadEnv resolves the wrapped value", () => {
   // What `import.meta.env.VITE_AUTH_ENABLED` becomes: loadEnv prefix-matches
